@@ -28,6 +28,14 @@ Copy beams files from ``./ebin`` directory to ejabberd ebin directory (which is 
         
     $ sudo ./ebin/*.beam /usr/lib/ejabberd/ebin/.
           
+### Configuration
+
+Add following line in your ``ejabberd.cfg`` file to configure mod_roster_redis
+
+```
+{mod_roster_redis,  [{redis_host, "localhost"}, {redis_port, 6379}, {redis_password, none|password}]},
+```
+
 ### Dependencies
           
 This module is compatible with ejabberd 2.1.x versions.

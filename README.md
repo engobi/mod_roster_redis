@@ -30,10 +30,18 @@ Copy beams files from ``./ebin`` directory to ejabberd ebin directory (which is 
           
 ### Configuration
 
-Add following line in your ``ejabberd.cfg`` file to configure mod_roster_redis
+Add following line in your ``ejabberd.cfg`` file to configure mod_roster_redis 
+
+    if your Redis is not in cluster mode
 
 ```
 {mod_roster_redis,  [{redis_host, "localhost"}, {redis_port, 6379}, {redis_password, none|password}]},
+```
+
+    if your Redisis in cluster mode (it could be a good idea to write on master and to read on slave)
+         
+```
+{mod_roster_redis,  [{redis_ro_host, "localhost"}, {redis_ro_port, 6379}, {redis_rw_host, "localhost"}, {redis_rw_port, 6379}, {redis_password, none|password}]},
 ```
 
 ### Dependencies

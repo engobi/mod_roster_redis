@@ -191,8 +191,8 @@ read_roster_version(LUser, LServer, mnesia) ->
         [] -> error
     end;
 read_roster_version(LUser, LServer, redis) ->
-    Redis_host = redis_host(LServer),
-    Redis_port = redis_port(LServer),
+    Redis_host = redis_host(LServer, ro),
+    Redis_port = redis_port(LServer, ro),
     Redis_database = redis_database(LServer),
     Redis_password = redis_password(LServer),
     {ok, C} = case Redis_password of
@@ -232,8 +232,8 @@ write_roster_version(LUser, LServer, InTransaction, Ver, mnesia) ->
             mnesia:dirty_write(#roster_version{us = US, version = Ver})
     end;
 write_roster_version(LUser, LServer, _InTransaction, Ver, redis) ->
-    Redis_host = redis_host(LServer),
-    Redis_port = redis_port(LServer),
+    Redis_host = redis_host(LServer, rw),
+    Redis_port = redis_port(LServer, rw),
     Redis_database = redis_database(LServer),
     Redis_password = redis_password(LServer),
     {ok, C} = case Redis_password of
@@ -343,8 +343,8 @@ get_roster(LUser, LServer, mnesia) ->
             []
     end;
 get_roster(LUser, LServer, redis) ->
-    Redis_host = redis_host(LServer),
-    Redis_port = redis_port(LServer),
+    Redis_host = redis_host(LServer, ro),
+    Redis_port = redis_port(LServer, ro),
     Redis_database = redis_database(LServer),
     Redis_password = redis_password(LServer),
     {ok, C} = case Redis_password of
@@ -690,8 +690,8 @@ roster_subscribe_t(LUser, LServer, LJID, Item) ->
 roster_subscribe_t(_LUser, _LServer, _LJID, Item, mnesia) ->
     mnesia:write(Item);
 roster_subscribe_t(LUser, LServer, LJID, Item, redis) ->
-    Redis_host = redis_host(LServer),
-    Redis_port = redis_port(LServer),
+    Redis_host = redis_host(LServer, rw),
+    Redis_port = redis_port(LServer, rw),
     {RUser, RServer, _} = LJID,
     Redis_database = redis_database(LServer),
     Redis_password = redis_password(LServer),
@@ -977,8 +977,8 @@ remove_user(LUser, LServer, mnesia) ->
         end,
     mnesia:transaction(F);
 remove_user(LUser, LServer, redis) ->
-    Redis_host = redis_host(LServer),
-    Redis_port = redis_port(LServer),
+    Redis_host = redis_host(LServer, rw),
+    Redis_port = redis_port(LServer, rw),
     Redis_database = redis_database(LServer),
     Redis_password = redis_password(LServer),
     {ok, C} = case Redis_password of
@@ -1062,8 +1062,8 @@ update_roster_t(_LUser, _LServer, _LJID, Item, mnesia) ->
 update_roster_t(LUser, LServer, LJID, Item, redis) ->
     {RUser, RServer, _} = LJID,
     NewRosterRedis = redis_make_record_from_roster_user(LUser, Item),
-    Redis_host = redis_host(LServer),
-    Redis_port = redis_port(LServer),
+    Redis_host = redis_host(LServer, rw),
+    Redis_port = redis_port(LServer, rw),
     Redis_database = redis_database(LServer),
     Redis_password = redis_password(LServer),
     {ok, C} = case Redis_password of
@@ -1087,8 +1087,8 @@ del_roster_t(LUser, LServer, LJID, mnesia) ->
     mnesia:delete({roster, {LUser, LServer, LJID}});
 del_roster_t(LUser, LServer, LJID, redis) ->
     {RUser, RServer, _} = LJID,
-    Redis_host = redis_host(LServer),
-    Redis_port = redis_port(LServer),
+    Redis_host = redis_host(LServer, rw),
+    Redis_port = redis_port(LServer, rw),
     Redis_database = redis_database(LServer),
     Redis_password = redis_password(LServer),
     {ok, C} = case Redis_password of
@@ -1649,7 +1649,6 @@ webadmin_user(Acc, _User, _Server, Lang) ->
 %% redis
 
 redis_make_record_from_roster_user(_User, Item) ->
-    %{RUser, RServer, _} = Item#roster.jid,
     Name = Item#roster.name,
     Subscription = redis_subscription_to_string(Item#roster.subscription),
     Ask = redis_ask_to_string(Item#roster.ask),
@@ -1662,13 +1661,6 @@ redis_make_record_from_roster_user(_User, Item) ->
         end,
     RosterEntry = Name ++ "::" ++ Subscription ++ "::" ++ Ask ++ "::" ++ AskMessage ++ "::" ++ Groups,
     RosterEntry.
-
-%redis_make_roster_record(User, [HdEntry | TlEntries] ) ->
-%    redis_make_roster_record(User, TlEntries, redis_make_record_from_roster_user(User, HdEntry)).
-%
-%redis_make_roster_record(User, [HdEntry | TlEntries], Acc ) ->
-%    redis_make_roster_record(User, TlEntries, Acc ++ "||" ++ redis_make_record_from_roster_user(User, HdEntry));
-%redis_make_roster_record(_User, [], Acc ) -> Acc.
 
 redis_update_roster([HdEntry | TlEntries], {Name, NewRosterEntry}) ->
     case HdEntry#roster.name of
@@ -1688,8 +1680,6 @@ redis_update_roster([HdEntry | TlEntries], {Name, NewRosterEntry}, RosterAcc) ->
     end;
 redis_update_roster([], {_Name, _NewRosterEntry}, RosterAcc) -> RosterAcc.
 
-%redis_make_roster_user_from_record( User, Server, RUser, RServer, BEntry ) when is_binary(BEntry)->
-%    redis_make_roster_user_from_record( User, Server, RUser, RServer, binary_to_list(BEntry) );
 redis_make_roster_user_from_record( User, Server, RUser, RServer, Entry ) ->
     [ Name, Subscription, Ask, AskMessage, Group] = re:split( Entry, "::", [{return,list}]),
     JID = {RUser, RServer, []},
@@ -1765,11 +1755,27 @@ redis_filter_keys([HdKey | TlKeys], Acc) ->
     end;
 redis_filter_keys([], Acc) -> Acc.
 
-redis_host(Host) ->
-  gen_mod:get_module_opt(Host, ?MODULE, redis_host, "127.0.0.1").
+redis_host(Host, Type) ->
+    RHost = case Type of
+        ro -> gen_mod:get_module_opt(Host, ?MODULE, redis_ro_host, undefined);
+        rw -> gen_mod:get_module_opt(Host, ?MODULE, redis_rw_host, undefined);
+        _ -> undefined
+    end,
+    case RHost of 
+        undefined -> gen_mod:get_module_opt(Host, ?MODULE, redis_host, "127.0.0.1");
+        _ -> RHost
+    end.
 
-redis_port(Host) ->
-  gen_mod:get_module_opt(Host, ?MODULE, redis_port, 6379).
+redis_port(Host, Type) ->
+   RPort = case Type of
+      ro -> gen_mod:get_module_opt(Host, ?MODULE, redis_ro_port, undefined);
+      rw -> gen_mod:get_module_opt(Host, ?MODULE, redis_rw_port, undefined);
+      _ -> undefined
+  end,
+  case RPort of
+      undefined -> gen_mod:get_module_opt(Host, ?MODULE, redis_port, 6379);
+      _ -> RPort
+  end.
 
 redis_database(Host) ->
   gen_mod:get_module_opt(Host, ?MODULE, redis_database, 0).
